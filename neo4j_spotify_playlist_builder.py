@@ -6,22 +6,21 @@ import pandas as pd
 from spotipy.oauth2 import SpotifyClientCredentials, SpotifyOAuth
 
 # ------------------------------------ Configuration parameters ------------------------------------ #
-user_id = "[ADD YOUR SPOTIFY USER ID HERE]"                         # Spotify user ID.
-playlist_uri = "[ADD YOUR PUBLIC PLAYLIST TO SORT HERE]"            # original playlist with songs to be sorted.
-client = "[ADD YOUR SPOTIFY CLIENT ID HERE]"                        # Spotify client ID.
-secret = "[ADD YOUR SPOTIFY CLIENT SECRET HERE]"                    # Spotify client secret.
-neo4j_url = "neo4j://localhost:7687"                                # url of the neo4j database.
+playlist_uri = ""                                                   # original playlist with songs to be sorted.
+client = ""                                                         # Spotify client ID.
+secret = ""                                                         # Spotify client secret.
+neo4j_url = "bolt://localhost:7687"                                 # url of the neo4j database.
 neo4j_username = "neo4j"                                            # neo4j username. defaults to 'neo4j'.
-neo4j_password = "neo"                                              # neo4j password.
+neo4j_password = "neoneoneo"                                        # neo4j password.
 scope = 'playlist-modify-private'                                   # Spotify scope required to manage playlists.
-redirect_uri = 'http://localhost:8888/callback'                     # Spotify callback url. Set to localhost for development.
+redirect_uri = 'http://localhost:3000/auth/callback'                # Spotify callback url. Set to localhost for development.
 cache_path = "spotify_cache.tmp"                                    # Where spotify caches the session variables.
 create_constraints = True                                           # Whether to create constraints.
 write_to_spotify = True                                             # Whether to write back the generated playlists to spotify.
 plot_kmeans_clusters = False                                        # Whether to plot the kmeans clusters used for playlists.
 min_playlist_size = 40                                              # Cut off for playlists to be grouped as 'misc'
-playlist_split_limit = 160                                          # min size for playlists to be chopped up in smaller ones.
-playlist_desc = 'Generated using neo4j-playlist-builder.'           # Description of the generated playlists.
+playlist_split_limit = 75                                           # min size for playlists to be chopped up in smaller ones.
+playlist_desc = ''                                                  # Description of the generated playlists.
 playlist_keywords_count = 3                                         # Number of keywords to use in dynamic playlist names.
 filtered_keywords = '"and", "pop", "mellow", "new", "rock", "folk"' # generic keywords to not include in playlist names
 playlist_prefix = '[NPB]'                                           # Prefix to put in front of your spotify playlists.
@@ -41,12 +40,12 @@ def load_graph_using_spotify_api():
 
     print("creating albums...")
     albums = get_album_info(tracks)
-    neo4j.run("UNWIND $albums as album CREATE (a:Album{id: a.id}) SET a = album",
+    neo4j.run("UNWIND $albums as album CREATE (a:Album{id: album.id}) SET a = album",
               parameters={'albums': list(albums.values())})
 
     print("creating artists..")
     artists = get_artist_info(tracks)
-    neo4j.run("UNWIND $artists as artist CREATE (a:Artist{id: a.id}) SET a = artist",
+    neo4j.run("UNWIND $artists as artist CREATE (a:Artist{id: artist.id}) SET a = artist",
               parameters={'artists': list(artists.values())})
 
     print("creating genres..")
@@ -76,15 +75,15 @@ def load_graph_using_spotify_api():
 
 def recreate_contraints(neo4j):
     # recreate constraints / indices and clear existing database.
-    results = neo4j.run("CALL db.constraints")
+    results = neo4j.run("SHOW CONSTRAINTS")
     for constraint in results:
-        result = neo4j.run("DROP " + constraint['description'])
-    neo4j.run("CREATE CONSTRAINT ON (g:Genre) ASSERT g.name IS UNIQUE")
-    neo4j.run("CREATE CONSTRAINT ON (p:Playlist) ASSERT p.name IS UNIQUE")
-    neo4j.run("CREATE CONSTRAINT ON (a:Album) ASSERT a.id IS UNIQUE")
-    neo4j.run("CREATE CONSTRAINT ON (s:SuperGenre) ASSERT s.id IS UNIQUE")
-    neo4j.run("CREATE CONSTRAINT ON (a:Artist) ASSERT a.id IS UNIQUE")
-    neo4j.run("CREATE CONSTRAINT ON (t:Track) ASSERT t.id IS UNIQUE")
+        result = neo4j.run("DROP CONSTRAINT " + constraint['name'])
+    neo4j.run("CREATE CONSTRAINT FOR (g:Genre) REQUIRE g.name IS UNIQUE")
+    neo4j.run("CREATE CONSTRAINT FOR (p:Playlist) REQUIRE p.name IS UNIQUE")
+    neo4j.run("CREATE CONSTRAINT FOR (a:Album) REQUIRE a.id IS UNIQUE")
+    neo4j.run("CREATE CONSTRAINT FOR (s:SuperGenre) REQUIRE s.id IS UNIQUE")
+    neo4j.run("CREATE CONSTRAINT FOR (a:Artist) REQUIRE a.id IS UNIQUE")
+    neo4j.run("CREATE CONSTRAINT FOR (t:Track) REQUIRE t.id IS UNIQUE")
     neo4j.run("MATCH (n) DETACH DELETE n;")
 
 
@@ -121,7 +120,7 @@ def cluster_genres_with_gds(neo4j):
     RETURN graphName + " was dropped." as message
     """, name='genre-similar-to-genre')
 
-    result = neo4j.run("""CALL gds.graph.create.cypher(
+    result = neo4j.run("""CALL gds.graph.project.cypher(
           'genre-has-artist',
           'MATCH (p) WHERE p:Artist OR p:Genre RETURN id(p) as id',
           'MATCH (t:Artist)-[:HAS_GENRE]->(g:Genre) RETURN id(g) AS source, id(t) AS target')
@@ -130,7 +129,7 @@ def cluster_genres_with_gds(neo4j):
                  writeRelationshipType: 'SIMILAR_TO',
                  writeProperty: 'score' })
     """)
-    result = neo4j.run("""CALL gds.graph.create(
+    result = neo4j.run("""CALL gds.graph.project(
                 'genre-similar-to-genre',
                 'Genre',{SIMILAR_TO: {orientation: 'NATURAL'}},
                 { relationshipProperties: 'score'})
@@ -324,6 +323,8 @@ def create_playlists_in_spotify(neo4j, page_size=100):
     MATCH (n:Playlist)-[:IN_PLAYLIST]-(t:Track) 
     RETURN n.name as name, n.valence as valence, n.energy as energy, n.id as playlist, collect(t.id) as tracks
     """).data()
+
+    user_id = spotify.me()['id']
 
     for item in result:
         playlist = spotify.user_playlist_create(user_id, item['name'], public=False,

@@ -20,6 +20,7 @@ playlist_uri = "[ADD YOUR PUBLIC PLAYLIST TO SORT HERE]"
 ```
 
 Steps:
+1. Install Neo4j Desktop and go through the setup. Create a new neo4j project then add a local database. Install the APOC and Graph Data Science Library plugins (click on the database, then click on plugins, then install those two)
 1. Your `user_id` can be found by using the web version of spotify and going to your profile overview. A spotify user id will look something like this: `111306XXXXX`
 2. You need the Spotify developer dashboard to obtain a client id/secret. You can access it here: https://developer.spotify.com/dashboard/login. Next, create an app to obtain a `client_id` and a `client_secret`.
 3. Your public `playlist_uri` can be found using the spotify application. Right click a playlist, select 'Share' and click 'Copy Spotify URI'. Your URI will have the following format: `spotify:playlist:XXXXXXXXXXXXXXXXXX`
@@ -28,10 +29,11 @@ Steps:
     ```
     neo4j_url = "bolt://localhost:7687"
     neo4j_username = "neo4j"
-    neo4j_password = "neo" 
+    neo4j_password = "neoneoneo" 
     ```
     Keep in mind this application clears your database, so best use a fresh DB. 
     **Ensure that your Neo4j installation has the Neo4j Graph Data Science plugin installed!**
+    ^ Do this by going into Neo4j Desktop, clicking on the database, going to the plugins tab, then installing the APOC and the Graph Data Science Library plugins
 6. Install python dependencies in `requirements.txt`.
 7. Run `neo4j_spotify_playlist_builder.py` and watch the magic happen!
 
